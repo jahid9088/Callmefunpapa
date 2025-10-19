@@ -1,0 +1,244 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TASHAN WIN — Simple Admin (No Login UI)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #0b0b0c; color: #eaeaea; }
+    header { padding: 16px 20px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; }
+    header h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+    .status { font-size: 12px; margin-left: auto; color:#98a2b3; }
+    main { padding: 20px; max-width: 900px; margin: 0 auto; }
+    .card { background: #111214; border: 1px solid #1f2328; border-radius: 14px; overflow: hidden; }
+    .card h3 { margin: 0; padding: 14px 16px; border-bottom: 1px solid #1f2328; font-size: 14px; color: #c9d1d9; background: #0e1012; }
+    .card .content { padding: 16px; }
+    label { display: block; font-size: 12px; color: #9aa4ad; margin: 12px 0 6px; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #2a2f36; background: #0c0f12; color: #eaeef2; outline: none; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btns { display: flex; gap: 10px; margin-top: 14px; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2a2f36; background: #171a1f; color: #eaeefa; cursor: pointer; }
+    button.primary { background: #2563eb; border-color: #2563eb; }
+    .ok { color:#22c55e }
+    .err { color:#ef4444 }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TASHAN WIN — Simple Admin (No Login UI)</h1>
+    <span id="status" class="status">Connecting…</span>
+  </header>  <main>
+    <section class="card">
+      <h3>Controls (Writes to /data/data)</h3>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>amount1</label>
+            <input id="amount1" type="number" placeholder="0" />
+          </div>
+          <div>
+            <label>link</label>
+            <input id="link" type="text" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>win1</label>
+            <input id="win1" type="number" placeholder="0" />
+          </div>
+          <div>
+            <label>loss1</label>
+            <input id="loss1" type="number" placeholder="0" />
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+          <input id="update1" type="checkbox" />
+          <label for="update1">Show UPDATE dialog (update1 = true)</label>
+        </div>
+        <div class="btns">
+          <button id="btnLoad">Load</button>
+          <button id="btnSave" class="primary">Save</button>
+        </div>
+      </div>
+    </section><section class="card" style="margin-top:16px">
+  <h3>Users (Writes to /Users/{mobile})</h3>
+  <div class="content">
+    <div class="row">
+      <div>
+        <label>Mobile</label>
+        <input id="u_mobile" type="text" placeholder="Enter mobile number" />
+      </div>
+      <div>
+        <label>Brand</label>
+        <input id="u_brand" type="text" placeholder="owner / pro / vip" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Time</label>
+        <input id="u_time" type="text" placeholder="limited / lifetime / 30d" />
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:10px">
+        <button id="btnUserAdd" class="primary">Add / Update User</button>
+        <button id="btnUsersReload">Reload Users</button>
+        <button id="btnUsersDeleteSelected" class="danger">Delete Selected</button>
+      </div>
+    </div>
+    <label style="margin-top:12px">Search</label>
+    <input id="u_search" type="text" placeholder="Filter by mobile / brand / time" />
+    <div id="usersWrap" style="margin-top:14px; max-height:420px; overflow:auto; border:1px solid #1f2328; border-radius:12px">
+      <table id="usersTable" style="width:100%; border-collapse:collapse; font-size:13px">
+        <thead>
+          <tr style="background:#0e1012; color:#c9d1d9">
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328; width:44px"><input id="u_select_all" type="checkbox" /></th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328">#</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328">Mobile</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328">Brand</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328">Time</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #1f2328">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+    <p class="muted">Tap Delete to remove one user, or select multiple and click "Delete Selected".</p>
+  </div>
+</section>
+
+  </main>  <!-- Firebase v10 Modular CDN -->  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getDatabase, ref, get, update, remove, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDOeW9OQsYfHohBOQXbV-CuIgX-u-OKBxU',
+      authDomain: 'callmefunpapa.firebaseapp.com',
+      databaseURL: 'https://callmefunpapa-default-rtdb.firebaseio.com',
+      projectId: 'callmefunpapa',
+      storageBucket: 'callmefunpapa.appspot.com',
+      messagingSenderId: '153118031603',
+      appId: '1:153118031603:android:1f77f8b608a4bc8fc50186'
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const $ = (id) => document.getElementById(id);
+    const setStatus = (m,c) => { const s=$('status'); s.textContent=m; s.className='status ' + (c||''); };
+
+    // ==== Controls (/data/data) ====
+    $('btnLoad').onclick = async () => {
+      try {
+        const snap = await get(ref(db, 'data/data'));
+        if (snap.exists()) {
+          const d = snap.val()||{};
+          $('amount1').value = d.amount1 ?? '';
+          $('win1').value = d.win1 ?? '';
+          $('loss1').value = d.loss1 ?? '';
+          $('link').value = d.link ?? '';
+          $('update1').checked = (d.update1 === true || d.update1 === 'true');
+          setStatus('Loaded', 'ok');
+        } else setStatus('No data yet');
+      } catch(e){ setStatus(e.message,'err'); }
+    };
+
+    $('btnSave').onclick = async () => {
+      try {
+        const payload = {
+          amount1: $('amount1').value || '0',
+          win1: $('win1').value || '0',
+          loss1: $('loss1').value || '0',
+          link: $('link').value || '',
+          update1: $('update1').checked ? 'true' : 'false'
+        };
+        await update(ref(db, 'data/data'), payload);
+        setStatus('Saved ✔','ok');
+      } catch(e){ setStatus(e.message,'err'); }
+    };
+
+    // Auto-load
+    $('btnLoad').click();
+
+    // ==== Users CRUD (/Users/{mobile}) ====
+    const usersPath = 'Users';
+    let usersCache = {};
+
+    async function loadUsersOnce(){
+      const snap = await get(ref(db, usersPath));
+      usersCache = snap.exists() ? (snap.val()||{}) : {};
+      renderUsers();
+    }
+
+    function renderUsers(){
+      const body = $('usersBody');
+      const q = $('u_search').value.toLowerCase().trim();
+      const entries = Object.entries(usersCache || {});
+      body.innerHTML = '';
+      let idx = 1;
+      entries
+        .filter(([mobile, obj]) => {
+          const s = (mobile + ' ' + (obj?.brand||'') + ' ' + (obj?.time||'')).toLowerCase();
+          return !q || s.includes(q);
+        })
+        .sort((a,b)=> a[0].localeCompare(b[0]))
+        .forEach(([mobile, obj]) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td style="padding:8px; border-bottom:1px solid #1f2328"><input type="checkbox" class="u_chk" data-mobile="${mobile}"></td>
+            <td style="padding:8px; border-bottom:1px solid #1f2328">${idx++}</td>
+            <td style="padding:8px; border-bottom:1px solid #1f2328">${mobile}</td>
+            <td style="padding:8px; border-bottom:1px solid #1f2328">${obj?.brand||''}</td>
+            <td style="padding:8px; border-bottom:1px solid #1f2328">${obj?.time||''}</td>
+            <td style="padding:8px; border-bottom:1px solid #1f2328">
+              <button data-del="${mobile}" class="danger">Delete</button>
+            </td>`;
+          body.appendChild(tr);
+        });
+
+      // Attach single delete handlers
+      [...document.querySelectorAll('button[data-del]')].forEach(btn => {
+        btn.onclick = async () => {
+          const mobile = btn.getAttribute('data-del');
+          try { await remove(ref(db, `${usersPath}/${mobile}`)); setStatus(`Deleted ${mobile}`,'ok'); }
+          catch(e){ setStatus(e.message,'err'); }
+        };
+      });
+
+      $('u_select_all').onclick = (e)=>{
+        const on = e.target.checked;
+        document.querySelectorAll('.u_chk').forEach(ch=> ch.checked = on);
+      };
+    }
+
+    $('btnUsersReload').onclick = loadUsersOnce;
+
+    $('u_search').oninput = renderUsers;
+
+    $('btnUserAdd').onclick = async () => {
+      const mobile = $('u_mobile').value.trim();
+      const brand = $('u_brand').value.trim() || 'owner';
+      const time  = $('u_time').value.trim()  || 'limited';
+      if (!mobile) { setStatus('Mobile required','err'); return; }
+      try {
+        await update(ref(db, `${usersPath}/${mobile}`), { mobile, brand, time });
+        setStatus(`Saved user ${mobile}`,'ok');
+        $('u_mobile').value = '';
+        loadUsersOnce();
+      } catch(e){ setStatus(e.message,'err'); }
+    };
+
+    $('btnUsersDeleteSelected').onclick = async () => {
+      const selected = [...document.querySelectorAll('.u_chk:checked')].map(ch=> ch.getAttribute('data-mobile'));
+      if (!selected.length) { setStatus('No users selected','err'); return; }
+      try {
+        const updates = {};
+        selected.forEach(m => updates[`${usersPath}/${m}`] = null);
+        await update(ref(db), updates);
+        setStatus(`Deleted ${selected.length} user(s)`,'ok');
+      } catch(e){ setStatus(e.message,'err'); }
+    };
+
+    onValue(ref(db, usersPath), snap => { usersCache = snap.exists()? (snap.val()||{}):{}; renderUsers(); });
+
+    loadUsersOnce();
+  </script></body>
+</html>
